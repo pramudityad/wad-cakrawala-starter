@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, computed_field
 
 
 class SessionIn(BaseModel):
@@ -8,8 +8,27 @@ class SessionIn(BaseModel):
     tanggal: date
     pemateri: str
     kapasitas: int
-    terdaftar: int = 0
+
+
+class RegistrationIn(BaseModel):
+    user_id: int
+
+
+class RegistrationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    session_id: int
+    user_id: int
 
 
 class SessionOut(SessionIn):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
+    registrations: list[RegistrationOut] = []
+
+    @computed_field
+    @property
+    def terdaftar(self) -> int:
+        return len(self.registrations)
