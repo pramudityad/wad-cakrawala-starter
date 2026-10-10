@@ -26,3 +26,26 @@ uvicorn app.main:app --reload
 `venv/` tidak di-commit — sudah diatur di `.gitignore`.
 
 Hapus berkas ini kalau sudah tidak perlu.
+
+<!-- applikasi internal yang digunakan oleh tim HR -->
+<!-- untuk training session tracker // training komunikasi, training kesehatan -->
+
+<!-- venv/ virtual environment -->
+1. project HR tracker
+- python. 
+- fastapi v1.0
+
+
+2. project absensi mahasiswa
+- python
+- fastapi v1.8
+
+
+requirement
+1. GET /sessions 
+2. GET /sessions/{}
+3. POST /sessions
+4. DELETE /sessions/{}
+
+pov admin
+1. create, delete, get 
