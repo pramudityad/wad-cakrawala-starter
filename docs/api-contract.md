@@ -1,53 +1,51 @@
 # Kontrak API
 
-> **Stub — diisi di Sesi 7 (bobot 5%), lalu direkonsiliasi di Sesi 16.**
-> Kontrak ini harus cukup bagi kelompok lain untuk memakai API-mu **tanpa penjelasan lisan**.
-> Di Sesi 7 kelompok lain benar-benar akan mencobanya (peer review).
->
-> Hapus blok ini dan kata TODO saat kamu mengisinya.
-
-## Ringkasan
-
-TODO — satu paragraf: apa yang API ini layani, dan untuk siapa.
-
-Base URL lokal: `http://localhost:8000`
-Base URL produksi: TODO (diisi Sesi 14)
+API pelatihan HR: admin membuat sesi pelatihan, karyawan mendaftar dan membatalkan pendaftaran.
+Base URL lokal: `http://localhost:8000`. Base URL produksi: diisi di Sesi 14.
 
 ## Model data
 
-TODO — tiga tabel: `users`, `<induk>`, `<anak>`. Untuk tiap tabel: nama kolom, tipe, wajib/opsional,
-dan relasinya. Sertakan satu kalimat yang menjelaskan relasi one-to-many-nya.
+| Tabel | Kolom |
+|---|---|
+| `users` | id, email (unik), password_hash (tidak pernah dikembalikan), role (`user`/`admin`) |
+| `sessions` | id, judul, tanggal, pemateri, kapasitas |
+| `registrations` | id, session_id (FK), user_id (FK), unik (session_id, user_id) |
+
+Satu sesi punya banyak registrasi (one-to-many); satu pengguna tidak bisa mendaftar dua kali ke sesi yang sama.
 
 ## Autentikasi
 
-TODO — cara memperoleh token, di header mana dikirim, berapa lama berlaku (diisi Sesi 9).
+`POST /auth/login` menaruh JWT (berlaku 1 jam) di cookie `access_token` — `httpOnly`, `SameSite=Lax`,
+`Secure` di produksi. Klien memakai `credentials: "include"`; token tidak pernah terlihat oleh JavaScript.
 
 ## Endpoint
 
-Untuk **setiap** endpoint, isi tabel berikut. Jangan menyingkat.
+| Endpoint | Auth | Balasan |
+|---|---|---|
+| `POST /auth/register` `{email, password≥8}` | publik | 201 `{id,email,role}`; 409 email sudah ada |
+| `POST /auth/login` | publik | 200 + cookie; 401 `Email atau password salah` |
+| `POST /auth/logout` | publik | 204, cookie dihapus |
+| `GET /auth/me` | login | 200 `{id,email,role}` |
+| `GET /sessions?skip&limit&search` | login | 200 daftar sesi + `registrations` + `terdaftar` |
+| `GET /sessions/{id}` | login | 200; 404 |
+| `POST /sessions` `{judul,tanggal,pemateri,kapasitas}` | admin | 201; 422 isian salah |
+| `DELETE /sessions/{id}` | admin | 204; 404 |
+| `POST /sessions/{id}/registrations` | login | 201 milik pemanggil; 409 sudah terdaftar |
+| `GET` / `DELETE /registrations/{id}` | pemilik atau admin | 200 / 204; 403 bukan milikmu |
 
-### `GET /…`
-
-| Bagian | Isi |
-|---|---|
-| Tujuan | TODO |
-| Auth | TODO — publik / perlu token / perlu kepemilikan objek |
-| Query params | TODO |
-| Body permintaan | TODO |
-| Balasan 2xx | TODO — contoh JSON nyata, bukan skema |
-| Balasan error | TODO — status code mana, kapan, dan bentuk badan pesannya |
+Contoh error: `{"detail": "Bukan registrasi milikmu"}`.
 
 ## Status code yang dipakai
 
-| Kode | Kapan dipakai di API ini |
+| Kode | Kapan |
 |---|---|
-| 200 | TODO |
-| 201 | TODO |
-| 204 | TODO |
-| 400 / 422 | TODO — bedakan keduanya |
-| 401 vs 403 | TODO — bedakan keduanya, ini sering salah |
-| 404 | TODO |
+| 200 / 201 / 204 | berhasil / dibuat / berhasil tanpa badan |
+| 401 | tidak login atau token tidak valid — kami tidak tahu siapa kamu |
+| 403 | login, tapi bukan admin atau bukan pemilik objek |
+| 404 | id tidak ada |
+| 409 | pelanggaran UNIQUE di database (email atau pendaftaran ganda) |
+| 422 | bentuk isian salah (divalidasi Pydantic sebelum menyentuh database) |
 
 ## Versioning
 
-TODO — apa yang terjadi bila kontrak ini berubah setelah kelompok lain memakainya.
+Perubahan yang memecahkan kontrak ini diumumkan di thread kelompok sebelum digabung ke `main`.

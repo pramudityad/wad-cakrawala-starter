@@ -10,10 +10,6 @@ class SessionIn(BaseModel):
     kapasitas: int
 
 
-class RegistrationIn(BaseModel):
-    user_id: int
-
-
 class RegistrationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

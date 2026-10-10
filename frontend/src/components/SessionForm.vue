@@ -26,7 +26,7 @@ async function handleSubmit() {
   serverError.value = ''
   submitting.value = true
   try {
-    await createSession({ ...form, kapasitas: Number(form.kapasitas), terdaftar: 0 })
+    await createSession({ ...form, kapasitas: Number(form.kapasitas) })
     form.judul = ''
     form.tanggal = ''
     form.pemateri = ''

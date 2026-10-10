@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
-import { deleteSession, listSessions } from '../api/sessions'
+import { cancelRegistration, deleteSession, listSessions, registerFor } from '../api/sessions'
+import { currentUser } from '../auth'
 
 const sessions = ref([])
 const status = ref('loading') // loading | data | empty | error
@@ -34,6 +35,21 @@ async function handleDelete(id) {
   }
 }
 
+function myRegistration(s) {
+  return s.registrations.find((r) => r.user_id === currentUser.value.id)
+}
+
+async function toggleRegistration(s) {
+  try {
+    const mine = myRegistration(s)
+    await (mine ? cancelRegistration(mine.id) : registerFor(s.id))
+    await load()
+  } catch (err) {
+    errorMessage.value = err.message
+    status.value = 'error'
+  }
+}
+
 onMounted(load)
 onUnmounted(() => controller?.abort())
 
@@ -57,7 +73,12 @@ defineExpose({ refresh: load })
     <ul v-else>
       <li v-for="s in sessions" :key="s.id">
         <span>{{ s.judul }} — {{ s.pemateri }} ({{ s.terdaftar }}/{{ s.kapasitas }})</span>
-        <button type="button" @click="handleDelete(s.id)">Hapus</button>
+        <button type="button" @click="toggleRegistration(s)">
+          {{ myRegistration(s) ? 'Batal daftar' : 'Daftar' }}
+        </button>
+        <button v-if="currentUser.role === 'admin'" type="button" @click="handleDelete(s.id)">
+          Hapus
+        </button>
       </li>
     </ul>
   </section>

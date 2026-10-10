@@ -6,9 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth import get_current_user, require_admin, router as auth_router
 from app.db import get_db
-from app.model import RegistrationIn, RegistrationOut, SessionIn, SessionOut
-from app.orm import Registration, TrainingSession
+from app.model import RegistrationOut, SessionIn, SessionOut
+from app.orm import Registration, TrainingSession, User
 
 app = FastAPI()
 
@@ -16,9 +17,12 @@ origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_credentials=True,  # cookie httpOnly ikut terkirim
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 
 @app.get("/health")
@@ -35,7 +39,11 @@ def get_session_or_404(db: Session, session_id: int) -> TrainingSession:
 
 @app.get("/sessions")
 def list_sessions(
-    skip: int = 0, limit: int = 10, search: str | None = None, db: Session = Depends(get_db)
+    skip: int = 0,
+    limit: int = 10,
+    search: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> list[SessionOut]:
     # selectinload: 2 query total (sesi + registrasi), bukan 1 + N
     stmt = select(TrainingSession).options(selectinload(TrainingSession.registrations))
@@ -46,12 +54,16 @@ def list_sessions(
 
 
 @app.get("/sessions/{session_id}")
-def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionOut:
+def get_session(
+    session_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)
+) -> SessionOut:
     return get_session_or_404(db, session_id)
 
 
 @app.post("/sessions", status_code=201)
-def create_session(payload: SessionIn, db: Session = Depends(get_db)) -> SessionOut:
+def create_session(
+    payload: SessionIn, db: Session = Depends(get_db), _: User = Depends(require_admin)
+) -> SessionOut:
     obj = TrainingSession(**payload.model_dump())
     db.add(obj)
     db.commit()
@@ -59,7 +71,7 @@ def create_session(payload: SessionIn, db: Session = Depends(get_db)) -> Session
 
 
 @app.delete("/sessions/{session_id}", status_code=204)
-def delete_session(session_id: int, db: Session = Depends(get_db)):
+def delete_session(session_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     db.delete(get_session_or_404(db, session_id))
     db.commit()
     return Response(status_code=204)
@@ -67,10 +79,10 @@ def delete_session(session_id: int, db: Session = Depends(get_db)):
 
 @app.post("/sessions/{session_id}/registrations", status_code=201)
 def register(
-    session_id: int, payload: RegistrationIn, db: Session = Depends(get_db)
+    session_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ) -> RegistrationOut:
     get_session_or_404(db, session_id)
-    reg = Registration(session_id=session_id, user_id=payload.user_id)
+    reg = Registration(session_id=session_id, user_id=user.id)  # selalu milik pemanggil
     db.add(reg)
     try:
         db.commit()
@@ -78,3 +90,29 @@ def register(
         db.rollback()
         raise HTTPException(status_code=409, detail="Sudah terdaftar di sesi ini")
     return reg
+
+
+def get_own_registration(db: Session, reg_id: int, user: User) -> Registration:
+    """Otorisasi level objek: pemilik atau admin. Sisanya 403."""
+    reg = db.get(Registration, reg_id)
+    if reg is None:
+        raise HTTPException(status_code=404, detail="Registrasi tidak ditemukan")
+    if reg.user_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Bukan registrasi milikmu")
+    return reg
+
+
+@app.get("/registrations/{reg_id}")
+def get_registration(
+    reg_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> RegistrationOut:
+    return get_own_registration(db, reg_id, user)
+
+
+@app.delete("/registrations/{reg_id}", status_code=204)
+def cancel_registration(
+    reg_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    db.delete(get_own_registration(db, reg_id, user))
+    db.commit()
+    return Response(status_code=204)
